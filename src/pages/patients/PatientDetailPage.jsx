@@ -26,7 +26,6 @@ import {
     Breadcrumbs,
     Link,
     Paper,
-    Divider,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -47,9 +46,29 @@ import {
     Visibility,
     Male,
     Female,
+    CheckCircle,
+    Error as ErrorIcon,
+    HourglassEmpty,
+    Image,
+    Download,
+    ThreeDRotation,
 } from '@mui/icons-material';
 import { patientsAPI, medicalRecordsAPI } from '../../services/api';
 import toast from 'react-hot-toast';
+import config from '../../config';
+import XrayViewerModal from '../../components/XrayViewerModal';
+
+/**
+ * Build PUBLIC URL for displaying files (images, etc.)
+ * DB chỉ lưu relative path: patient_files/xxx/yyy.png
+ * FE gắn PUBLIC_URL để hiển thị qua Kong
+ * 
+ * @param {string} relativePath - Relative path from DB
+ * @returns {string} Full public URL
+ */
+const buildFileUrl = (relativePath) => {
+    return config.getFileUrl(relativePath);
+};
 
 // Tab Panel Component
 const TabPanel = ({ children, value, index, ...other }) => (
@@ -67,6 +86,10 @@ const PatientDetailPage = () => {
     const [loading, setLoading] = useState(true);
     const [tabValue, setTabValue] = useState(0);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    
+    // X-ray Viewer Modal state
+    const [xrayViewerOpen, setXrayViewerOpen] = useState(false);
+    const [viewingXrayUrl, setViewingXrayUrl] = useState(null);
 
     // Load patient data
     const loadPatient = useCallback(async () => {
@@ -74,11 +97,13 @@ const PatientDetailPage = () => {
         try {
             const [patientData, recordsData] = await Promise.all([
                 patientsAPI.getById(id),
-                medicalRecordsAPI.getByPatient(id).catch(() => []),
+                medicalRecordsAPI.getByPatient(id).catch(() => ({ records: [] })),
             ]);
             
             setPatient(patientData);
-            setMedicalRecords(recordsData.items || recordsData || []);
+            // BE returns { records: [...], total, page, page_size }
+            const recordsList = recordsData.records || recordsData.items || (Array.isArray(recordsData) ? recordsData : []);
+            setMedicalRecords(recordsList);
         } catch (err) {
             console.error('Failed to load patient:', err);
             toast.error('Không thể tải thông tin bệnh nhân');
@@ -370,18 +395,207 @@ const PatientDetailPage = () => {
                     </CardContent>
                 </TabPanel>
 
-                {/* Inference History Tab */}
+                {/* Inference History Tab - Enhanced with images */}
                 <TabPanel value={tabValue} index={1}>
                     <CardContent>
                         <Typography variant="h6" fontWeight="bold" gutterBottom>
-                            Lịch sử tái tạo CT
+                            Lịch sử tái tạo CT ({medicalRecords.reduce((acc, r) => acc + (r.infer_history?.length || 0), 0)} lần)
                         </Typography>
-                        <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'grey.50' }}>
-                            <Biotech sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                            <Typography color="text.secondary">
-                                Xem lịch sử tái tạo CT trong từng hồ sơ bệnh án
-                            </Typography>
-                        </Paper>
+                        
+                        {medicalRecords.every(r => !r.infer_history || r.infer_history.length === 0) ? (
+                            <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'grey.50', borderRadius: 3 }}>
+                                <Biotech sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+                                <Typography variant="h6" color="text.secondary" gutterBottom>
+                                    Chưa có lượt tái tạo CT nào
+                                </Typography>
+                                <Typography color="text.secondary" sx={{ mb: 2 }}>
+                                    Tạo hồ sơ bệnh án và tải ảnh X-ray để bắt đầu tái tạo CT 3D
+                                </Typography>
+                                <Button
+                                    variant="contained"
+                                    startIcon={<Add />}
+                                    onClick={() => navigate(`/medical-records/new?patient_id=${id}`)}
+                                >
+                                    Tạo hồ sơ bệnh án
+                                </Button>
+                            </Paper>
+                        ) : (
+                            <Grid container spacing={3}>
+                                {medicalRecords.map(record => 
+                                    record.infer_history?.map((inference, idx) => (
+                                        <Grid item xs={12} sm={6} md={4} key={`${record.id}-${inference.id || idx}`}>
+                                            <Card 
+                                                sx={{ 
+                                                    borderRadius: 3,
+                                                    overflow: 'hidden',
+                                                    transition: 'all 0.3s ease',
+                                                    '&:hover': {
+                                                        transform: 'translateY(-4px)',
+                                                        boxShadow: '0 12px 24px rgba(0,0,0,0.15)',
+                                                    },
+                                                }}
+                                            >
+                                                {/* X-ray Image Preview */}
+                                                <Box 
+                                                    sx={{ 
+                                                        position: 'relative',
+                                                        height: 200,
+                                                        bgcolor: 'grey.900',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        overflow: 'hidden',
+                                                    }}
+                                                >
+                                                    {inference.xray_path ? (
+                                                        <img
+                                                            src={buildFileUrl(inference.xray_path)}
+                                                            alt="X-ray"
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'contain',
+                                                            }}
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                                e.target.nextSibling.style.display = 'flex';
+                                                            }}
+                                                        />
+                                                    ) : null}
+                                                    <Box 
+                                                        sx={{ 
+                                                            display: inference.xray_path ? 'none' : 'flex',
+                                                            flexDirection: 'column',
+                                                            alignItems: 'center',
+                                                            color: 'grey.500',
+                                                        }}
+                                                    >
+                                                        <Image sx={{ fontSize: 48, mb: 1 }} />
+                                                        <Typography variant="caption">Không có ảnh X-ray</Typography>
+                                                    </Box>
+                                                    
+                                                    {/* Status Badge */}
+                                                    <Chip
+                                                        size="small"
+                                                        icon={
+                                                            inference.status === 'completed' ? <CheckCircle /> :
+                                                            inference.status === 'failed' ? <ErrorIcon /> :
+                                                            inference.status === 'processing' ? <Biotech /> :
+                                                            <HourglassEmpty />
+                                                        }
+                                                        label={
+                                                            inference.status === 'completed' ? 'Hoàn thành' :
+                                                            inference.status === 'failed' ? 'Thất bại' :
+                                                            inference.status === 'processing' ? 'Đang xử lý' :
+                                                            'Đang chờ'
+                                                        }
+                                                        color={
+                                                            inference.status === 'completed' ? 'success' :
+                                                            inference.status === 'failed' ? 'error' :
+                                                            inference.status === 'processing' ? 'info' :
+                                                            'warning'
+                                                        }
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            top: 12,
+                                                            right: 12,
+                                                            fontWeight: 'bold',
+                                                        }}
+                                                    />
+                                                </Box>
+                                                
+                                                <CardContent sx={{ p: 2 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                                        <CalendarMonth sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            {new Date(inference.created_at).toLocaleString('vi-VN')}
+                                                        </Typography>
+                                                    </Box>
+                                                    
+                                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                                        Hồ sơ: {record.diagnosis || 'Chưa có chẩn đoán'}
+                                                    </Typography>
+                                                    
+                                                    {inference.status === 'failed' && inference.error && (
+                                                        <Alert severity="error" sx={{ mb: 2, py: 0 }}>
+                                                            <Typography variant="caption">{inference.error}</Typography>
+                                                        </Alert>
+                                                    )}
+                                                    
+                                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                                        {inference.status === 'completed' && inference.ct_path && (
+                                                            <>
+                                                                <Button
+                                                                    variant="contained"
+                                                                    size="small"
+                                                                    startIcon={<ThreeDRotation />}
+                                                                    onClick={() => {
+                                                                        let url = `/viewer?file=${encodeURIComponent(buildFileUrl(inference.ct_path))}`;
+                                                                        if (inference.xray_path) {
+                                                                            url += `&xray=${encodeURIComponent(buildFileUrl(inference.xray_path))}`;
+                                                                        }
+                                                                        navigate(url);
+                                                                    }}
+                                                                    sx={{ flex: 1 }}
+                                                                >
+                                                                    Xem 3D
+                                                                </Button>
+                                                                {inference.xray_path && (
+                                                                    <>
+                                                                        <IconButton 
+                                                                            size="small"
+                                                                            onClick={() => {
+                                                                                setViewingXrayUrl(buildFileUrl(inference.xray_path));
+                                                                                setXrayViewerOpen(true);
+                                                                            }}
+                                                                            title="Xem X-ray"
+                                                                            sx={{ border: 1, borderColor: 'divider' }}
+                                                                        >
+                                                                            <Visibility />
+                                                                        </IconButton>
+                                                                        <IconButton 
+                                                                            size="small"
+                                                                            href={buildFileUrl(inference.xray_path)}
+                                                                            download
+                                                                            title="Tải X-ray"
+                                                                            sx={{ border: 1, borderColor: 'divider' }}
+                                                                        >
+                                                                            <Image />
+                                                                        </IconButton>
+                                                                    </>
+                                                                )}
+                                                                <IconButton 
+                                                                    size="small"
+                                                                    href={buildFileUrl(inference.ct_path)}
+                                                                    download
+                                                                    title="Tải NIfTI"
+                                                                    sx={{ border: 1, borderColor: 'divider' }}
+                                                                >
+                                                                    <Download />
+                                                                </IconButton>
+                                                            </>
+                                                        )}
+                                                        {inference.status === 'processing' && (
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                                                <CircularProgress size={20} />
+                                                                <Typography variant="body2" color="text.secondary">
+                                                                    Đang xử lý...
+                                                                </Typography>
+                                                            </Box>
+                                                        )}
+                                                        {inference.status === 'pending' && (
+                                                            <Typography variant="body2" color="warning.main" sx={{ width: '100%', textAlign: 'center' }}>
+                                                                Đang chờ xử lý...
+                                                            </Typography>
+                                                        )}
+                                                    </Box>
+                                                </CardContent>
+                                            </Card>
+                                        </Grid>
+                                    ))
+                                )}
+                            </Grid>
+                        )}
                     </CardContent>
                 </TabPanel>
             </Card>
@@ -402,6 +616,17 @@ const PatientDetailPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* X-ray Viewer Modal */}
+            <XrayViewerModal
+                open={xrayViewerOpen}
+                onClose={() => {
+                    setXrayViewerOpen(false);
+                    setViewingXrayUrl(null);
+                }}
+                imageUrl={viewingXrayUrl}
+                title="Ảnh X-ray"
+            />
         </Container>
     );
 };

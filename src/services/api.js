@@ -2,12 +2,11 @@
  * API Service - Centralized API calls
  */
 import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+import config from '../config';
 
 // Create axios instance
 const api = axios.create({
-    baseURL: API_BASE_URL,
+    baseURL: config.API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -20,6 +19,10 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        
+        // NOTE: FastAPI now has redirect_slashes=False, so trailing slash doesn't matter
+        // Just use URLs as-is without modifying them
+        
         return config;
     },
     (error) => {
@@ -66,6 +69,30 @@ export const authAPI = {
     refreshToken: async () => {
         const refreshToken = localStorage.getItem('refresh_token');
         const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+        return response.data;
+    },
+    
+    updateProfile: async (profileData) => {
+        const response = await api.put('/auth/profile', profileData);
+        return response.data;
+    },
+    
+    changePassword: async (passwordData) => {
+        const response = await api.post('/auth/change-password', passwordData);
+        return response.data;
+    },
+    
+    loginWithFace: async (faceData) => {
+        const response = await api.post('/face/verify-login', faceData);
+        return response.data;
+    },
+    
+    // Register face images for current authenticated user
+    // Backend uses current_user from token, no need to send user_id
+    registerFace: async (faceImages) => {
+        const response = await api.post('/face/register', {
+            images: faceImages  // Backend expects 'images' field, not 'face_images'
+        });
         return response.data;
     },
     
@@ -177,12 +204,12 @@ export const inferenceAPI = {
 // ========== Statistics API ==========
 export const statisticsAPI = {
     getDashboard: async () => {
-        const response = await api.get('/statistics/');
+        const response = await api.get('/statistics');
         return response.data;
     },
     
     getAll: async () => {
-        const response = await api.get('/statistics/');
+        const response = await api.get('/statistics');
         return response.data;
     }
 };
@@ -216,6 +243,46 @@ export const usersAPI = {
     
     toggleActive: async (id) => {
         const response = await api.patch(`/users/${id}/toggle-active`);
+        return response.data;
+    }
+};
+
+// ========== Profile API ==========
+export const profileAPI = {
+    // Get current user profile
+    getProfile: async () => {
+        const response = await api.get('/users/me');
+        return response.data;
+    },
+    
+    // Update current user profile
+    updateProfile: async (profileData) => {
+        const response = await api.put('/users/me', profileData);
+        return response.data;
+    },
+    
+    // Upload avatar
+    uploadAvatar: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post('/users/me/avatar', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    
+    // Delete avatar
+    deleteAvatar: async () => {
+        const response = await api.delete('/users/me/avatar');
+        return response.data;
+    },
+    
+    // Change password
+    changePassword: async (currentPassword, newPassword) => {
+        const response = await api.post('/users/me/change-password', {
+            current_password: currentPassword,
+            new_password: newPassword
+        });
         return response.data;
     }
 };

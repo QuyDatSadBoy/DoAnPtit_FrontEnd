@@ -2,34 +2,58 @@
  * Socket.IO Service - Real-time notifications
  */
 import { io } from 'socket.io-client';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:8000';
+import config from '../config';
 
 class SocketService {
     constructor() {
         this.socket = null;
         this.listeners = new Map();
+        this.isConnecting = false;
     }
 
     // Connect to Socket.IO server
     connect(userId) {
-        if (this.socket?.connected) {
+        // Check if Socket.IO is enabled
+        if (!config.ENABLE_SOCKET) {
+            config.debug('Socket.IO is disabled');
             return;
         }
+        
+        // Prevent duplicate connections
+        if (this.socket?.connected) {
+            console.log('🔌 Socket already connected, skipping...');
+            return;
+        }
+        
+        // Prevent multiple connect attempts at the same time
+        if (this.isConnecting) {
+            console.log('🔌 Socket connection in progress, skipping...');
+            return;
+        }
+        
+        // If socket exists but not connected, disconnect first
+        if (this.socket) {
+            console.log('🔌 Cleaning up existing socket...');
+            this.socket.removeAllListeners();
+            this.socket.disconnect();
+            this.socket = null;
+        }
+        
+        this.isConnecting = true;
 
         const token = localStorage.getItem('access_token');
         
-        this.socket = io(SOCKET_URL, {
+        this.socket = io(config.SOCKET_URL, {
             auth: { token },
-            transports: ['websocket', 'polling'],
+            transports: ['websocket'],  // Only WebSocket, no polling (for Kong compatibility)
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
         });
 
         this.socket.on('connect', () => {
-            console.log('🔌 Socket.IO connected');
-            // Join user's notification room
-            this.socket.emit('join', { user_id: userId });
+            this.isConnecting = false;
+            console.log('🔌 Socket.IO connected, socket id:', this.socket?.id);
+            // User room is automatically joined by BE based on token
         });
 
         this.socket.on('disconnect', (reason) => {
@@ -37,7 +61,8 @@ class SocketService {
         });
 
         this.socket.on('connect_error', (error) => {
-            console.error('Socket.IO connection error:', error);
+            this.isConnecting = false;
+            console.log('❌ Socket.IO connection error:', error.message);
         });
 
         // Setup default listeners
@@ -77,6 +102,19 @@ class SocketService {
             console.log('🔔 Notification:', data);
             this.notifyListeners('notification', data);
         });
+        
+        // Fallback for any inference_update events
+        this.socket.on('inference_update', (data) => {
+            console.log('📡 Inference update:', data);
+            // Map to appropriate event based on status
+            if (data.status === 'completed') {
+                this.notifyListeners('inference_completed', data);
+            } else if (data.status === 'failed') {
+                this.notifyListeners('inference_failed', data);
+            } else {
+                this.notifyListeners('inference_status', data);
+            }
+        });
     }
 
     // Add event listener
@@ -103,7 +141,7 @@ class SocketService {
             try {
                 callback(data);
             } catch (error) {
-                console.error('Socket listener error:', error);
+                config.debug('Socket listener error:', error);
             }
         });
     }
@@ -113,7 +151,7 @@ class SocketService {
         if (this.socket?.connected) {
             this.socket.emit(event, data);
         } else {
-            console.warn('Socket not connected, cannot emit:', event);
+            config.debug('Socket not connected, cannot emit:', event);
         }
     }
 

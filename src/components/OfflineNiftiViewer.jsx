@@ -1,4 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import config from '../config';
 import {
   Box,
   Container,
@@ -6,69 +8,98 @@ import {
   Paper,
   Button,
   Alert,
-  Card,
-  CardContent,
   Grid,
   Chip,
   Divider,
   LinearProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Tabs,
   Tab,
   Slider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Switch,
   FormControlLabel,
-  Tooltip,
   IconButton,
-  Fab,
-  AppBar,
-  Toolbar,
-  Stack,
 } from '@mui/material';
 import {
   CloudUpload,
-  Visibility,
-  Download,
-  Settings,
+  CloudOff,
   ZoomIn,
   ZoomOut,
-  RotateLeft,
-  RotateRight,
-  CenterFocusStrong,
   PlayArrow,
   Pause,
   SkipNext,
   SkipPrevious,
-  Fullscreen,
-  Share,
-  Info,
-  ViewInAr,
-  Layers,
-  Tune,
   WifiOff,
   Computer,
-  CloudOff,
+  Download,
+  Image as ImageIcon,
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
 import * as nifti from 'nifti-reader-js';
 import pako from 'pako';
 import localforage from 'localforage';
 
+// Helper function to download file via API (with proper auth)
+const downloadFile = async (fileUrl, defaultFilename = 'download') => {
+    if (!fileUrl) return;
+    
+    try {
+        // Parse URL to extract patient_id, record_id, filename
+        const urlObj = new URL(fileUrl);
+        const pathParts = urlObj.pathname.split('/').filter(p => p);
+        
+        // Check if it's a patient_files URL
+        if (pathParts[0] === 'patient_files' && pathParts.length >= 4) {
+            const patientId = pathParts[1];
+            const recordId = pathParts[2];
+            const filename = pathParts[3];
+            
+            // Use API endpoint for download
+            const token = localStorage.getItem('access_token');
+            const apiUrl = `${urlObj.origin}/api/v1/medical-records/download/${patientId}/${recordId}/${filename}`;
+            
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch file');
+            }
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            return;
+        }
+        
+        // Fallback: Open in new tab
+        window.open(fileUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+        console.error('Failed to download file:', error);
+        // Fallback: Open in new tab
+        window.open(fileUrl, '_blank', 'noopener,noreferrer');
+    }
+};
+
 const OfflineNiftiViewer = () => {
+  const [searchParams] = useSearchParams();
   const [niftiData, setNiftiData] = useState(null);
   const [niftiHeader, setNiftiHeader] = useState(null);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [loadingFromUrl, setLoadingFromUrl] = useState(false);
+  const [loadedFileName, setLoadedFileName] = useState(null);
+  const [currentFileUrl, setCurrentFileUrl] = useState(null);
   
   // Viewer state
   const [currentPlane, setCurrentPlane] = useState(0); // 0: axial, 1: sagittal, 2: coronal
@@ -87,13 +118,10 @@ const OfflineNiftiViewer = () => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
   // UI state
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   
   const playIntervalRef = useRef(null);
   const canvasRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // Medical windowing presets
   const windowPresets = {
@@ -116,9 +144,8 @@ const OfflineNiftiViewer = () => {
   useEffect(() => {
     const checkServerConnection = async () => {
       try {
-        const response = await fetch('/api/health', { 
+        const response = await fetch(`${config.API_URL}/health`, { 
           method: 'GET',
-          timeout: 5000 
         });
         if (response.ok) {
           setIsOfflineMode(false);
@@ -138,17 +165,18 @@ const OfflineNiftiViewer = () => {
   }, []);
 
   // Process NIfTI file client-side
-  const processNiftiFile = useCallback(async (file) => {
+  const processNiftiFile = useCallback(async (file, filename = null) => {
     setProcessing(true);
     setError(null);
 
     try {
       // Read file as ArrayBuffer
       const arrayBuffer = await file.arrayBuffer();
+      const actualFilename = filename || file.name;
       
       // Handle gzipped files
       let data;
-      if (file.name.endsWith('.gz')) {
+      if (actualFilename.endsWith('.gz')) {
         const compressed = new Uint8Array(arrayBuffer);
         data = pako.inflate(compressed).buffer;
       } else {
@@ -195,19 +223,25 @@ const OfflineNiftiViewer = () => {
       // Set initial slice to middle
       setSliceIndex(Math.floor(header.dims[3] / 2));
       
-      // Auto-adjust window/level based on data
-      const minVal = Math.min(...typedData);
-      const maxVal = Math.max(...typedData);
+      // Auto-adjust window/level based on data (use loop to avoid stack overflow)
+      let minVal = Infinity, maxVal = -Infinity;
+      const sampleSize = Math.min(typedData.length, 500000);
+      const step = Math.max(1, Math.floor(typedData.length / sampleSize));
+      for (let i = 0; i < typedData.length; i += step) {
+        const val = typedData[i];
+        if (val < minVal) minVal = val;
+        if (val > maxVal) maxVal = val;
+      }
       const range = maxVal - minVal;
       setWindowCenter((maxVal + minVal) / 2);
-      setWindowWidth(range);
+      setWindowWidth(range || 800);
 
       // Store in local storage for persistence
       await localforage.setItem('nifti_header', header);
       await localforage.setItem('nifti_data', typedData);
-      await localforage.setItem('nifti_filename', file.name);
+      await localforage.setItem('nifti_filename', filename || file?.name);
 
-      toast.success('NIfTI file loaded successfully in offline mode!');
+      toast.success('NIfTI file loaded successfully!');
       
     } catch (error) {
       console.error('Error processing NIfTI file:', error);
@@ -215,8 +249,118 @@ const OfflineNiftiViewer = () => {
       toast.error(`Error processing file: ${error.message}`);
     } finally {
       setProcessing(false);
+      setLoadingFromUrl(false);
     }
   }, []);
+
+  // Fetch and process NIfTI file from URL
+  const loadNiftiFromUrl = useCallback(async (fileUrl) => {
+    setLoadingFromUrl(true);
+    setProcessing(true);
+    setError(null);
+    setCurrentFileUrl(fileUrl); // Save URL for download
+
+    try {
+      // Extract filename from URL
+      const urlPath = new URL(fileUrl).pathname;
+      const filename = urlPath.split('/').pop() || 'ct_scan.nii.gz';
+      setLoadedFileName(filename);
+
+      toast.loading('Đang tải file NIfTI từ server...', { id: 'loading-nifti' });
+
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Handle gzipped files
+      let data;
+      if (filename.endsWith('.gz')) {
+        const compressed = new Uint8Array(arrayBuffer);
+        data = pako.inflate(compressed).buffer;
+      } else {
+        data = arrayBuffer;
+      }
+
+      // Parse NIfTI header
+      if (!nifti.isNIFTI(data)) {
+        throw new Error('File is not a valid NIfTI format');
+      }
+
+      const header = nifti.readHeader(data);
+      const image = nifti.readImage(header, data);
+
+      if (!header || !image) {
+        throw new Error('Failed to read NIfTI file');
+      }
+
+      // Convert to typed array based on data type
+      let typedData;
+      switch (header.datatypeCode) {
+        case nifti.NIFTI1.TYPE_UINT8:
+          typedData = new Uint8Array(image);
+          break;
+        case nifti.NIFTI1.TYPE_INT16:
+          typedData = new Int16Array(image);
+          break;
+        case nifti.NIFTI1.TYPE_INT32:
+          typedData = new Int32Array(image);
+          break;
+        case nifti.NIFTI1.TYPE_FLOAT32:
+          typedData = new Float32Array(image);
+          break;
+        case nifti.NIFTI1.TYPE_FLOAT64:
+          typedData = new Float64Array(image);
+          break;
+        default:
+          typedData = new Float32Array(image);
+      }
+
+      setNiftiHeader(header);
+      setNiftiData(typedData);
+      
+      // Set initial slice to middle
+      setSliceIndex(Math.floor(header.dims[3] / 2));
+      
+      // Auto-adjust window/level based on data (use loop to avoid stack overflow)
+      let minVal = Infinity, maxVal = -Infinity;
+      const sampleSize = Math.min(typedData.length, 500000);
+      const step = Math.max(1, Math.floor(typedData.length / sampleSize));
+      for (let i = 0; i < typedData.length; i += step) {
+        const val = typedData[i];
+        if (val < minVal) minVal = val;
+        if (val > maxVal) maxVal = val;
+      }
+      const range = maxVal - minVal;
+      setWindowCenter((maxVal + minVal) / 2);
+      setWindowWidth(range || 800);
+
+      toast.dismiss('loading-nifti');
+      toast.success('File CT đã được tải thành công!');
+      
+    } catch (error) {
+      console.error('Error loading NIfTI from URL:', error);
+      setError(`Không thể tải file: ${error.message}`);
+      toast.dismiss('loading-nifti');
+      toast.error(`Lỗi tải file: ${error.message}`);
+    } finally {
+      setProcessing(false);
+      setLoadingFromUrl(false);
+    }
+  }, []);
+
+  // Get xray URL from params
+  const xrayUrl = searchParams.get('xray');
+
+  // Auto-load from URL param on mount
+  useEffect(() => {
+    const fileUrl = searchParams.get('file');
+    if (fileUrl && !niftiData && !processing) {
+      loadNiftiFromUrl(fileUrl);
+    }
+  }, [searchParams, niftiData, processing, loadNiftiFromUrl]);
 
   // File upload handling
   const onDrop = useCallback(async (acceptedFiles) => {
@@ -229,7 +373,8 @@ const OfflineNiftiViewer = () => {
       return;
     }
 
-    await processNiftiFile(file);
+    setLoadedFileName(file.name);
+    await processNiftiFile(file, file.name);
   }, [processNiftiFile]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -345,6 +490,7 @@ const OfflineNiftiViewer = () => {
     }
 
     ctx.putImageData(imageData, 0, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getSliceData, applyWindowing]);
 
   // Update canvas when slice changes
@@ -581,6 +727,28 @@ const OfflineNiftiViewer = () => {
                 variant="outlined"
               />
             </Grid>
+            {xrayUrl && (
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  startIcon={<ImageIcon />}
+                  onClick={() => downloadFile(xrayUrl, 'xray.png')}
+                >
+                  Tải X-ray
+                </Button>
+              </Grid>
+            )}
+            {currentFileUrl && (
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={() => downloadFile(currentFileUrl, 'ct_result.nii.gz')}
+                >
+                  Tải NIfTI
+                </Button>
+              </Grid>
+            )}
             <Grid item>
               <Button
                 variant="outlined"

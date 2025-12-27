@@ -24,7 +24,6 @@ import {
 import {
     Save,
     ArrowBack,
-    Person,
 } from '@mui/icons-material';
 import { patientsAPI } from '../../services/api';
 import toast from 'react-hot-toast';
@@ -53,6 +52,7 @@ const PatientFormPage = () => {
         if (isEdit) {
             loadPatient();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     const loadPatient = async () => {

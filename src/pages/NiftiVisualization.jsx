@@ -1,4 +1,6 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import config from '../config';
 import {
   Box,
   Container,
@@ -6,74 +8,52 @@ import {
   Paper,
   Button,
   Alert,
-  Card,
-  CardContent,
   Grid,
   Chip,
   Divider,
   LinearProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Tabs,
   Tab,
   Slider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Switch,
   FormControlLabel,
-  Tooltip,
   IconButton,
-  Fab,
 } from '@mui/material';
 import {
   CloudUpload,
-  Visibility,
   Download,
-  Settings,
-  ZoomIn,
-  ZoomOut,
-  RotateLeft,
-  RotateRight,
-  CenterFocusStrong,
   PlayArrow,
   Pause,
   SkipNext,
   SkipPrevious,
-  Fullscreen,
-  Share,
-  Info,
-  ViewInAr,
-  Layers,
-  Tune,
   WifiOff,
   Computer,
-  CloudOff,
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
-import * as nifti from 'nifti-reader-js';
-import pako from 'pako';
-import localforage from 'localforage';
 import OfflineNiftiViewer from '../components/OfflineNiftiViewer';
 
 const NiftiVisualization = () => {
+  const [searchParams] = useSearchParams();
   const [currentSession, setCurrentSession] = useState(null);
   const [metadata, setMetadata] = useState(null);
   const [error, setError] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [serverAvailable, setServerAvailable] = useState(true);
   
+  // Check if file URL param exists - if so, use offline viewer to load it
+  const fileUrlParam = searchParams.get('file');
+  
   // Viewer state
   const [currentPlane, setCurrentPlane] = useState(0); // 0: axial, 1: sagittal, 2: coronal
   const [sliceIndex, setSliceIndex] = useState(0);
+  // eslint-disable-next-line no-unused-vars
   const [sliceData, setSliceData] = useState(null);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -84,10 +64,6 @@ const NiftiVisualization = () => {
   const [windowWidth, setWindowWidth] = useState(350);
   const [useWindowing, setUseWindowing] = useState(true);
   const [currentPreset, setCurrentPreset] = useState('soft_tissue');
-  
-  // UI state
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
   
   const playIntervalRef = useRef(null);
   const canvasRef = useRef(null);
@@ -116,7 +92,7 @@ const NiftiVisualization = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
         
-        const response = await fetch('/api/health', {
+        const response = await fetch(`${config.API_URL}/health`, {
           method: 'GET',
           signal: controller.signal
         });
@@ -165,7 +141,7 @@ const NiftiVisualization = () => {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/api/upload-nifti', {
+        const response = await fetch(`${config.API_URL}/nifti/upload`, {
           method: 'POST',
           body: formData,
         });
@@ -197,6 +173,7 @@ const NiftiVisualization = () => {
       setIsOfflineMode(true);
       toast.info('Đang sử dụng chế độ offline');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverAvailable, isOfflineMode]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -213,7 +190,7 @@ const NiftiVisualization = () => {
   const loadMetadata = async (sessionId) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/nifti-metadata/${sessionId}`);
+      const response = await fetch(`${config.API_URL}/nifti/metadata/${sessionId}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -241,7 +218,7 @@ const NiftiVisualization = () => {
     setViewerLoading(true);
     try {
       const planeNames = ['axial', 'sagittal', 'coronal'];
-      let url = `/api/nifti-slice/${sessionId}/${planeNames[plane]}/${index}`;
+      let url = `${config.API_URL}/nifti/slice/${sessionId}/${planeNames[plane]}/${index}`;
       
       if (useWindowing) {
         url += `?window_center=${windowCenter}&window_width=${windowWidth}`;
@@ -375,7 +352,7 @@ const NiftiVisualization = () => {
     if (!currentSession) return;
     
     try {
-      const response = await fetch(`/api/download-nifti/${currentSession}/${format}`);
+      const response = await fetch(`${config.API_URL}/nifti/download/${currentSession}/${format}`);
       if (!response.ok) throw new Error('Download failed');
       
       const blob = await response.blob();
@@ -400,8 +377,8 @@ const NiftiVisualization = () => {
     stopAnimation();
   };
 
-  // If in offline mode, use the offline viewer
-  if (isOfflineMode) {
+  // If file URL param exists or in offline mode, use the offline viewer (which handles URL params)
+  if (fileUrlParam || isOfflineMode) {
     return <OfflineNiftiViewer />;
   }
 
