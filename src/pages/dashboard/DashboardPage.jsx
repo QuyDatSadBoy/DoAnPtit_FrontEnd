@@ -279,10 +279,10 @@ const DashboardPage = () => {
                 total_records: statsData.total_records || 0,
                 total_inferences: statsData.total_inferences || 0,
                 completed_inferences: statsData.completed_inferences || 0,
-                my_patients: statsData.my_patients || statsData.total_patients || 0,
-                my_records: statsData.my_records || statsData.total_records || 0,
-                my_inferences: statsData.my_inferences || statsData.total_inferences || 0,
-                my_completed_inferences: statsData.my_completed_inferences || statsData.completed_inferences || 0,
+                my_patients: statsData.my_patients ?? 0,
+                my_records: statsData.my_records ?? 0,
+                my_inferences: statsData.my_inferences ?? 0,
+                my_completed_inferences: statsData.my_completed_inferences ?? 0,
             });
             
             let patients = [];
@@ -401,114 +401,60 @@ const DashboardPage = () => {
 
             {loading && <LinearProgress sx={{ mb: 3, borderRadius: 2 }} />}
 
-            {/* Admin Stats */}
-            {isAdmin && (
-                <Box sx={{ mb: 4 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                        <AdminPanelSettings sx={{ color: '#EF4444' }} />
-                        <Typography variant="h6" fontWeight="bold" sx={{ color: '#1E293B' }}>
-                            Thống kê hệ thống
-                        </Typography>
-                        <Chip label="Admin" size="small" sx={{ bgcolor: alpha('#EF4444', 0.1), color: '#EF4444', fontWeight: 600 }} />
-                    </Box>
-                    <Grid container spacing={3}>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <StatCard
-                                title="Tổng bệnh nhân"
-                                value={stats.total_patients}
-                                icon={<People />}
-                                color="#3B82F6"
-                                subtitle="Trong hệ thống"
-                                delay={0}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <StatCard
-                                title="Tổng hồ sơ"
-                                value={stats.total_records}
-                                icon={<MedicalServices />}
-                                color="#10B981"
-                                subtitle="Tất cả hồ sơ"
-                                delay={1}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <StatCard
-                                title="Tổng tái tạo CT"
-                                value={stats.total_inferences}
-                                icon={<Biotech />}
-                                color="#F59E0B"
-                                subtitle={`${stats.completed_inferences} hoàn thành`}
-                                delay={2}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <StatCard
-                                title="Tỷ lệ thành công"
-                                value={stats.total_inferences > 0 
-                                    ? `${Math.round((stats.completed_inferences / stats.total_inferences) * 100)}%`
-                                    : '0%'
-                                }
-                                icon={<TrendingUp />}
-                                color="#8B5CF6"
-                                subtitle="Tái tạo CT"
-                                delay={3}
-                            />
-                        </Grid>
-                    </Grid>
-                </Box>
-            )}
-
-            {/* Doctor Stats */}
+            {/* Stats - Admin sees total, Doctor sees my_ */}
             <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                     <PersonOutline sx={{ color: '#0891B2' }} />
                     <Typography variant="h6" fontWeight="bold" sx={{ color: '#1E293B' }}>
-                        {isAdmin ? 'Hoạt động cá nhân' : 'Thống kê của bạn'}
+                        {isAdmin ? 'Thống kê hệ thống' : 'Thống kê của bạn'}
                     </Typography>
+                    {isAdmin && (
+                        <Chip label="Admin" size="small" sx={{ bgcolor: alpha('#EF4444', 0.1), color: '#EF4444', fontWeight: 600 }} />
+                    )}
                 </Box>
                 <Grid container spacing={3}>
                     <Grid item xs={12} sm={6} md={3}>
                         <StatCard
                             title="Bệnh nhân"
-                            value={stats.my_patients}
+                            value={isAdmin ? stats.total_patients : stats.my_patients}
                             icon={<People />}
                             color="#0891B2"
-                            subtitle="Đang quản lý"
-                            delay={isAdmin ? 4 : 0}
+                            subtitle={isAdmin ? "Trong hệ thống" : "Đang quản lý"}
+                            delay={0}
                         />
                     </Grid>
                     <Grid item xs={12} sm={6} md={3}>
                         <StatCard
                             title="Hồ sơ bệnh án"
-                            value={stats.my_records}
+                            value={isAdmin ? stats.total_records : stats.my_records}
                             icon={<MedicalServices />}
                             color="#10B981"
-                            subtitle="Đã tạo"
-                            delay={isAdmin ? 5 : 1}
+                            subtitle={isAdmin ? "Tất cả hồ sơ" : "Đã tạo"}
+                            delay={1}
                         />
                     </Grid>
                     <Grid item xs={12} sm={6} md={3}>
                         <StatCard
                             title="Tái tạo CT"
-                            value={stats.my_inferences}
+                            value={isAdmin ? stats.total_inferences : stats.my_inferences}
                             icon={<ViewInAr />}
                             color="#F59E0B"
-                            subtitle={`${stats.my_completed_inferences} hoàn thành`}
-                            delay={isAdmin ? 6 : 2}
+                            subtitle={`${isAdmin ? stats.completed_inferences : stats.my_completed_inferences} hoàn thành`}
+                            delay={2}
                         />
                     </Grid>
                     <Grid item xs={12} sm={6} md={3}>
                         <StatCard
                             title="Thành công"
-                            value={stats.my_inferences > 0 
-                                ? `${Math.round((stats.my_completed_inferences / stats.my_inferences) * 100)}%`
-                                : '0%'
-                            }
+                            value={(() => {
+                                const total = isAdmin ? stats.total_inferences : stats.my_inferences;
+                                const completed = isAdmin ? stats.completed_inferences : stats.my_completed_inferences;
+                                return total > 0 ? `${Math.round((completed / total) * 100)}%` : '0%';
+                            })()}
                             icon={<AssignmentTurnedIn />}
                             color="#14B8A6"
-                            subtitle="Của bạn"
-                            delay={isAdmin ? 7 : 3}
+                            subtitle={isAdmin ? "Toàn hệ thống" : "Của bạn"}
+                            delay={3}
                         />
                     </Grid>
                 </Grid>
@@ -622,8 +568,15 @@ const DashboardPage = () => {
                                 ) : (
                                     <List disablePadding>
                                         {recentInferences.map((inference, index) => (
-                                            <Fade in key={inference.id || index} timeout={400 + index * 100}>
+                                            <Fade in key={inference.id || inference.inference_id || index} timeout={400 + index * 100}>
                                                 <ListItem
+                                                    onClick={() => {
+                                                        if (inference.record_id) {
+                                                            // Navigate giống như notification click - dùng query param
+                                                            const url = `/medical-records/${inference.record_id}?inference_id=${inference.inference_id}`;
+                                                            navigate(url);
+                                                        }
+                                                    }}
                                                     sx={{
                                                         borderRadius: 3,
                                                         mb: 1,
@@ -631,6 +584,13 @@ const DashboardPage = () => {
                                                         bgcolor: alpha('#F59E0B', 0.02),
                                                         border: '1px solid',
                                                         borderColor: alpha('#F59E0B', 0.08),
+                                                        cursor: inference.record_id ? 'pointer' : 'default',
+                                                        transition: 'all 0.2s ease',
+                                                        '&:hover': inference.record_id ? {
+                                                            bgcolor: alpha('#F59E0B', 0.08),
+                                                            transform: 'translateX(4px)',
+                                                            borderColor: alpha('#F59E0B', 0.2),
+                                                        } : {},
                                                     }}
                                                 >
                                                     <ListItemAvatar>
@@ -644,7 +604,17 @@ const DashboardPage = () => {
                                                                 {inference.patient_name || `Bệnh nhân #${index + 1}`}
                                                             </Typography>
                                                         }
-                                                        secondary={new Date(inference.created_at).toLocaleString('vi-VN')}
+                                                        secondary={
+                                                            new Date(inference.created_at).toLocaleString('vi-VN', {
+                                                                timeZone: 'Asia/Ho_Chi_Minh',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit',
+                                                                second: '2-digit',
+                                                                day: '2-digit',
+                                                                month: '2-digit',
+                                                                year: 'numeric'
+                                                            })
+                                                        }
                                                     />
                                                     <InferenceStatusBadge status={inference.status} />
                                                 </ListItem>

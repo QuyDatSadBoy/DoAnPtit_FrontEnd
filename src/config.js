@@ -116,9 +116,16 @@ const config = {
     getFileUrl: (relativePath) => {
         if (!relativePath) return null;
         
-        // Nếu đã là full URL thì trả về luôn
+        // Nếu đã là full URL, extract path và rebuild với PUBLIC_URL
         if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
-            return relativePath;
+            // Extract relative path from full URL (e.g., http://localhost:8999/avatars/... → avatars/...)
+            const match = relativePath.match(/(?:patient_files|uploads|avatars|static|face_images)\/.*/);
+            if (match) {
+                relativePath = match[0];
+            } else {
+                // Không match được pattern, trả về nguyên
+                return relativePath;
+            }
         }
         
         // Handle legacy absolute paths

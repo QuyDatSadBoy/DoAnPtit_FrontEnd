@@ -539,8 +539,10 @@ const LoginPage = () => {
                                             {/* Face Capture */}
                                             {faceLoginStatus !== 'success' && (
                                                 <FaceCapture
-                                                    onCapture={handleFaceCapture}
+                                                    onSubmit={handleFaceCapture}
                                                     mode="login"
+                                                    autoLogin={true}
+                                                    autoStart={true}
                                                     disabled={faceLoginStatus === 'processing'}
                                                 />
                                             )}

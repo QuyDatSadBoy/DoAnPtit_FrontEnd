@@ -102,7 +102,7 @@ const RegisterPage = () => {
     const [success, setSuccess] = useState(false);
     
     // Face Recognition state
-    const [enableFaceLogin, setEnableFaceLogin] = useState(true);
+    const [enableFaceLogin, setEnableFaceLogin] = useState(false); // Default OFF - optional feature
     const [faceImages, setFaceImages] = useState([]);
     const [faceRegistrationStatus, setFaceRegistrationStatus] = useState('pending'); // pending | success | skipped
 
@@ -143,13 +143,10 @@ const RegisterPage = () => {
                 return;
             }
         }
-        // Validation for step 2 - Face Recognition
+        // Validation for step 2 - Face Recognition (OPTIONAL)
         if (activeStep === 2) {
-            if (enableFaceLogin && faceImages.length < 3) {
-                setError('Vui lòng chụp ít nhất 3 ảnh khuôn mặt hoặc bỏ qua bước này');
-                return;
-            }
-            if (enableFaceLogin && faceImages.length >= 3) {
+            // Face is optional - just check if user enabled it and has images
+            if (enableFaceLogin && faceImages.length >= 1) {
                 setFaceRegistrationStatus('success');
             } else {
                 setFaceRegistrationStatus('skipped');
@@ -456,10 +453,10 @@ const RegisterPage = () => {
                                         </Box>
                                         <Box>
                                             <Typography variant="subtitle1" fontWeight={600}>
-                                                Đăng nhập bằng khuôn mặt
+                                                Đăng nhập bằng khuôn mặt (Tùy chọn)
                                             </Typography>
                                             <Typography variant="body2" color="text.secondary">
-                                                Bảo mật cao hơn, đăng nhập nhanh hơn
+                                                Bạn có thể thiết lập sau trong phần Cài đặt
                                             </Typography>
                                         </Box>
                                     </Box>
@@ -487,8 +484,8 @@ const RegisterPage = () => {
                             <Collapse in={enableFaceLogin}>
                                 <FaceCapture
                                     onCapture={handleFaceCapture}
-                                    minImages={3}
-                                    maxImages={5}
+                                    minImages={1}
+                                    maxImages={1}
                                     initialImages={faceImages}
                                     mode="register"
                                 />
@@ -498,8 +495,11 @@ const RegisterPage = () => {
                             {!enableFaceLogin && (
                                 <Box sx={{ textAlign: 'center', py: 4 }}>
                                     <FaceIcon sx={{ fontSize: 64, color: alpha('#0891B2', 0.3), mb: 2 }} />
-                                    <Typography variant="body1" color="text.secondary">
-                                        Bạn có thể bật tính năng này sau trong phần Cài đặt
+                                    <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+                                        Bạn có thể thiết lập tính năng này sau
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Vào <strong>Hồ sơ → Nhận diện khuôn mặt</strong> để đăng ký
                                     </Typography>
                                 </Box>
                             )}

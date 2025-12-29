@@ -136,12 +136,43 @@ const ProfilePage = () => {
     const [faceRegistered, setFaceRegistered] = useState(user?.face_registered || false);
     const [faceMessage, setFaceMessage] = useState(null);
     const [showFaceCapture, setShowFaceCapture] = useState(false);
+    const [registeredFaceImages, setRegisteredFaceImages] = useState([]);
+    const [faceRegisteredAt, setFaceRegisteredAt] = useState(null);
     
     // Build avatar URL using PUBLIC_URL for static files
     const getAvatarUrl = (avatarPath) => {
         if (!avatarPath) return null;
         return config.getPublicStaticUrl(avatarPath);
     };
+    
+    // Load registered face images when tab changes to face recognition
+    useEffect(() => {
+        const loadFaceImages = async () => {
+            // Load images when switching to face tab OR when faceRegistered changes
+            if (tabValue === 2) {
+                try {
+                    console.log('Loading face images... faceRegistered:', faceRegistered);
+                    const response = await authAPI.getMyFaceImages();
+                    console.log('Face images response:', response);
+                    
+                    if (response.success && response.images) {
+                        setRegisteredFaceImages(response.images);
+                        setFaceRegisteredAt(response.registered_at);
+                        // Also sync faceRegistered state
+                        if (response.face_registered !== faceRegistered) {
+                            setFaceRegistered(response.face_registered);
+                        }
+                    } else if (response.face_registered === false) {
+                        setRegisteredFaceImages([]);
+                        setFaceRegistered(false);
+                    }
+                } catch (err) {
+                    console.error('Failed to load face images:', err);
+                }
+            }
+        };
+        loadFaceImages();
+    }, [faceRegistered, tabValue]);
     
     useEffect(() => {
         if (user) {
@@ -291,8 +322,8 @@ const ProfilePage = () => {
     
     // Handle face capture for registration/update
     const handleFaceCapture = async (images) => {
-        if (!images || images.length < 3) {
-            setFaceMessage({ type: 'error', text: 'Cần ít nhất 3 ảnh khuôn mặt để đăng ký' });
+        if (!images || images.length < 1) {
+            setFaceMessage({ type: 'error', text: 'Cần ít nhất 1 ảnh khuôn mặt để đăng ký' });
             return;
         }
         
@@ -316,6 +347,17 @@ const ProfilePage = () => {
                 // Update user context
                 updateUser({ face_registered: true });
                 
+                // Reload face images to show newly registered faces
+                try {
+                    const faceImagesResponse = await authAPI.getMyFaceImages();
+                    if (faceImagesResponse.success && faceImagesResponse.images) {
+                        setRegisteredFaceImages(faceImagesResponse.images);
+                        setFaceRegisteredAt(faceImagesResponse.registered_at);
+                    }
+                } catch (err) {
+                    console.error('Failed to reload face images:', err);
+                }
+                
                 toast.success(faceRegistered ? 'Cập nhật khuôn mặt thành công!' : 'Đăng ký khuôn mặt thành công!');
             } else {
                 setFaceMessage({ type: 'error', text: response.message || 'Đăng ký khuôn mặt thất bại' });
@@ -326,6 +368,40 @@ const ProfilePage = () => {
                 type: 'error', 
                 text: error.response?.data?.detail || 'Đăng ký khuôn mặt thất bại. Vui lòng thử lại.'
             });
+        } finally {
+            setFaceLoading(false);
+        }
+    };
+    
+    // Handle delete face image
+    const handleDeleteFaceImage = async (imagePath) => {
+        // Extract filename from path (e.g., "face_images/123/face_1.jpg" -> "face_1.jpg")
+        const filename = imagePath.split('/').pop();
+        
+        if (!window.confirm(`Bạn có chắc muốn xóa ảnh ${filename}?`)) {
+            return;
+        }
+        
+        setFaceLoading(true);
+        try {
+            const response = await authAPI.deleteFaceImage(filename);
+            
+            if (response.success) {
+                // Update local state
+                setRegisteredFaceImages(prev => prev.filter(img => img !== imagePath));
+                
+                // Update face registration status if no images left
+                if (!response.face_registered) {
+                    setFaceRegistered(false);
+                    updateUser({ face_registered: false });
+                    toast.success('Đã xóa tất cả ảnh khuôn mặt. Face ID đã bị vô hiệu hóa.');
+                } else {
+                    toast.success(`Đã xóa ảnh. Còn lại ${response.remaining_images} ảnh.`);
+                }
+            }
+        } catch (error) {
+            console.error('Delete face image error:', error);
+            toast.error(error.response?.data?.detail || 'Không thể xóa ảnh');
         } finally {
             setFaceLoading(false);
         }
@@ -902,7 +978,7 @@ const ProfilePage = () => {
                                             </Typography>
                                             <Typography variant="body2" color="text.secondary">
                                                 {faceRegistered 
-                                                    ? 'Bạn có thể đăng nhập bằng khuôn mặt'
+                                                    ? `Đăng ký lúc: ${faceRegisteredAt ? new Date(faceRegisteredAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : 'N/A'}`
                                                     : 'Đăng ký khuôn mặt để sử dụng tính năng đăng nhập bằng khuôn mặt'
                                                 }
                                             </Typography>
@@ -914,6 +990,100 @@ const ProfilePage = () => {
                                         />
                                     </Box>
                                 </Paper>
+
+                                {/* Registered Face Images Preview - Always show when has images */}
+                                {registeredFaceImages.length > 0 && (
+                                    <Paper
+                                        elevation={0}
+                                        sx={{
+                                            p: 3,
+                                            mb: 3,
+                                            borderRadius: 3,
+                                            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                        }}
+                                    >
+                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <FaceIcon color="primary" fontSize="small" />
+                                            Ảnh khuôn mặt đã đăng ký ({registeredFaceImages.length}/3 ảnh)
+                                        </Typography>
+                                        <Grid container spacing={2} sx={{ mt: 1 }}>
+                                            {registeredFaceImages.map((imagePath, index) => (
+                                                <Grid item xs={4} sm={3} md={2} key={index}>
+                                                    <Box
+                                                        sx={{
+                                                            position: 'relative',
+                                                            borderRadius: 2,
+                                                            overflow: 'hidden',
+                                                            aspectRatio: '1',
+                                                            border: '2px solid',
+                                                            borderColor: 'success.main',
+                                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                                            '&:hover .delete-btn': {
+                                                                opacity: 1,
+                                                            },
+                                                        }}
+                                                    >
+                                                        <img
+                                                            src={config.getFileUrl(imagePath)}
+                                                            alt={`Khuôn mặt ${index + 1}`}
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'cover',
+                                                            }}
+                                                            onError={(e) => {
+                                                                e.target.src = '/placeholder-face.png';
+                                                            }}
+                                                        />
+                                                        {/* Delete button */}
+                                                        <IconButton
+                                                            className="delete-btn"
+                                                            size="small"
+                                                            onClick={() => handleDeleteFaceImage(imagePath)}
+                                                            disabled={faceLoading}
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                top: 4,
+                                                                right: 4,
+                                                                bgcolor: 'rgba(255,255,255,0.9)',
+                                                                color: 'error.main',
+                                                                opacity: 0,
+                                                                transition: 'opacity 0.2s',
+                                                                '&:hover': {
+                                                                    bgcolor: 'error.main',
+                                                                    color: 'white',
+                                                                },
+                                                                width: 28,
+                                                                height: 28,
+                                                            }}
+                                                        >
+                                                            <Delete fontSize="small" />
+                                                        </IconButton>
+                                                        <Chip
+                                                            label={index + 1}
+                                                            size="small"
+                                                            color="success"
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                bottom: 4,
+                                                                left: 4,
+                                                                fontSize: '0.7rem',
+                                                                height: 20,
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                </Grid>
+                                            ))}
+                                        </Grid>
+                                        {faceRegisteredAt && (
+                                            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+                                                Đăng ký lúc: {new Date(faceRegisteredAt).toLocaleString('vi-VN')}
+                                            </Typography>
+                                        )}
+                                    </Paper>
+                                )}
 
                                 {/* Face Message */}
                                 {faceMessage && (
@@ -939,9 +1109,9 @@ const ProfilePage = () => {
                                             </Button>
                                         </Box>
                                         <FaceCapture
-                                            onCapture={handleFaceCapture}
-                                            minImages={3}
-                                            maxImages={5}
+                                            onSubmit={handleFaceCapture}
+                                            minImages={1}
+                                            maxImages={1}
                                             mode="register"
                                             disabled={faceLoading}
                                         />

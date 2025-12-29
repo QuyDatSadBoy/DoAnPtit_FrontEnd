@@ -1,11 +1,11 @@
 {
   "files": {
-    "main.js": "/api/v1/fe/medical/static/js/main.d4376ad9.js",
-    "static/media/browser.cjs": "/api/v1/fe/medical/static/media/browser.6dd5f7ba7ba515ac9bb7.cjs",
-    "index.html": "/api/v1/fe/medical/index.html",
-    "main.d4376ad9.js.map": "/api/v1/fe/medical/static/js/main.d4376ad9.js.map"
+    "main.js": "/static/js/main.8dd51db4.js",
+    "static/media/browser.cjs": "/static/media/browser.6dd5f7ba7ba515ac9bb7.cjs",
+    "index.html": "/index.html",
+    "main.8dd51db4.js.map": "/static/js/main.8dd51db4.js.map"
   },
   "entrypoints": [
-    "static/js/main.d4376ad9.js"
+    "static/js/main.8dd51db4.js"
   ]
 }

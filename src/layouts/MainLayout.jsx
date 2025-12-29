@@ -494,6 +494,10 @@ const MainLayout = () => {
                     {/* Notifications */}
                     <Tooltip title="Thông báo">
                         <IconButton 
+                            id="notifications-button"
+                            aria-controls={Boolean(notificationAnchor) ? 'notifications-menu' : undefined}
+                            aria-haspopup="true"
+                            aria-expanded={Boolean(notificationAnchor) ? 'true' : undefined}
                             onClick={(e) => setNotificationAnchor(e.currentTarget)}
                             sx={{
                                 bgcolor: alpha('#0891B2', 0.08),
@@ -510,6 +514,10 @@ const MainLayout = () => {
 
                     {/* User Menu */}
                     <Box
+                        id="user-menu-button"
+                        aria-controls={Boolean(anchorEl) ? 'user-menu' : undefined}
+                        aria-haspopup="true"
+                        aria-expanded={Boolean(anchorEl) ? 'true' : undefined}
                         onClick={(e) => setAnchorEl(e.currentTarget)}
                         sx={{
                             display: 'flex',
@@ -554,17 +562,27 @@ const MainLayout = () => {
 
                     {/* User Menu Popover */}
                     <Menu
+                        id="user-menu"
                         anchorEl={anchorEl}
                         open={Boolean(anchorEl)}
                         onClose={() => setAnchorEl(null)}
                         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                        PaperProps={{
-                            sx: {
-                                mt: 1,
-                                borderRadius: 3,
-                                minWidth: 220,
-                                boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+                        disableAutoFocusItem
+                        autoFocus={false}
+                        disableRestoreFocus
+                        MenuListProps={{
+                            'aria-labelledby': 'user-menu-button',
+                            autoFocusItem: false,
+                        }}
+                        slotProps={{
+                            paper: {
+                                sx: {
+                                    mt: 1,
+                                    borderRadius: 3,
+                                    minWidth: 220,
+                                    boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+                                },
                             },
                         }}
                     >
@@ -600,22 +618,32 @@ const MainLayout = () => {
 
                     {/* Notifications Popover - Premium Healthcare Design */}
                     <Menu
+                        id="notifications-menu"
                         anchorEl={notificationAnchor}
                         open={Boolean(notificationAnchor)}
                         onClose={() => setNotificationAnchor(null)}
                         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                        PaperProps={{ 
-                            sx: { 
-                                width: 400, 
-                                maxHeight: 520,
-                                mt: 1.5,
-                                borderRadius: 3,
-                                boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-                                border: '1px solid',
-                                borderColor: 'divider',
-                                overflow: 'hidden',
-                            } 
+                        disableAutoFocusItem
+                        autoFocus={false}
+                        disableRestoreFocus
+                        MenuListProps={{
+                            'aria-labelledby': 'notifications-button',
+                            autoFocusItem: false,
+                        }}
+                        slotProps={{ 
+                            paper: {
+                                sx: { 
+                                    width: 400, 
+                                    maxHeight: 520,
+                                    mt: 1.5,
+                                    borderRadius: 3,
+                                    boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    overflow: 'hidden',
+                                },
+                            },
                         }}
                     >
                         {/* Header */}

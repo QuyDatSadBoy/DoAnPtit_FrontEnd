@@ -123,7 +123,8 @@ const SearchDialog = ({ open, onClose }) => {
                     search: debouncedSearch,
                     limit: 10,
                 });
-                setResults(response.items || response || []);
+                const patientsList = response.patients || response.items || response || [];
+                setResults(Array.isArray(patientsList) ? patientsList : []);
             } catch (error) {
                 console.error('Search error:', error);
                 setResults([]);

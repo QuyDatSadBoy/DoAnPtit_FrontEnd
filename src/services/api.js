@@ -96,6 +96,18 @@ export const authAPI = {
         return response.data;
     },
     
+    // Get registered face images for current user
+    getMyFaceImages: async () => {
+        const response = await api.get('/face/my-images');
+        return response.data;
+    },
+    
+    // Delete a specific face image
+    deleteFaceImage: async (filename) => {
+        const response = await api.delete(`/face/images/${filename}`);
+        return response.data;
+    },
+
     logout: () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -204,7 +216,7 @@ export const inferenceAPI = {
 // ========== Statistics API ==========
 export const statisticsAPI = {
     getDashboard: async () => {
-        const response = await api.get('/statistics');
+        const response = await api.get('/statistics/dashboard');
         return response.data;
     },
     
