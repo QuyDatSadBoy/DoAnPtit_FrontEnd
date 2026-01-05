@@ -37,6 +37,7 @@ import {
     Key as KeyIcon,
     Security as SecurityIcon,
     CheckCircle as CheckIcon,
+    Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import FaceCapture from '../../components/FaceCapture';
@@ -146,14 +147,15 @@ const LoginPage = () => {
         
         try {
             // Use loginWithFace from auth context
+            // NO username - system will search and verify strictly
             const result = await loginWithFace({
                 face_image: images[0], // Use the first captured image
-                username: formData.username || null, // Optional username
+                username: null, // Always null - let backend verify strictly
             });
             
             if (result.success) {
                 setFaceLoginStatus('success');
-                setFaceLoginMessage('Xác thực thành công!');
+                setFaceLoginMessage(`Xác thực thành công! Xin chào ${result.user?.full_name || result.user?.username || ''}`);
                 
                 setTimeout(() => {
                     navigate('/dashboard');
@@ -166,6 +168,12 @@ const LoginPage = () => {
             setFaceLoginStatus('error');
             setFaceLoginMessage('Lỗi kết nối. Vui lòng thử lại.');
         }
+    };
+
+    // Handle retry face login
+    const handleRetryFaceLogin = () => {
+        setFaceLoginStatus('idle');
+        setFaceLoginMessage('');
     };
 
     return (
@@ -492,29 +500,21 @@ const LoginPage = () => {
                                 {loginMode === 1 && (
                                     <Fade in timeout={400}>
                                         <Box>
-                                            {/* Optional username field */}
-                                            <TextField
-                                                fullWidth
-                                                name="username"
-                                                label="Tên đăng nhập (không bắt buộc)"
-                                                value={formData.username}
-                                                onChange={handleChange}
-                                                size="small"
+                                            {/* Face Login Info */}
+                                            <Box
                                                 sx={{
                                                     mb: 2,
-                                                    '& .MuiOutlinedInput-root': {
-                                                        borderRadius: 3,
-                                                    },
+                                                    p: 2,
+                                                    borderRadius: 2,
+                                                    bgcolor: alpha('#10B981', 0.08),
+                                                    border: `1px solid ${alpha('#10B981', 0.2)}`,
                                                 }}
-                                                helperText="Nhập tên đăng nhập để xác thực nhanh hơn"
-                                                InputProps={{
-                                                    startAdornment: (
-                                                        <InputAdornment position="start">
-                                                            <PersonOutlined sx={{ color: '#0891B2', fontSize: 20 }} />
-                                                        </InputAdornment>
-                                                    ),
-                                                }}
-                                            />
+                                            >
+                                                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <FaceIcon sx={{ color: '#10B981', fontSize: 20 }} />
+                                                    Đưa khuôn mặt vào camera để đăng nhập tự động
+                                                </Typography>
+                                            </Box>
 
                                             {/* Face Login Status */}
                                             {faceLoginStatus !== 'idle' && (
@@ -531,13 +531,49 @@ const LoginPage = () => {
                                                         ) : undefined
                                                     }
                                                     sx={{ mb: 2, borderRadius: 2 }}
+                                                    action={
+                                                        faceLoginStatus === 'error' && (
+                                                            <Button
+                                                                color="inherit"
+                                                                size="small"
+                                                                onClick={handleRetryFaceLogin}
+                                                                startIcon={<RefreshIcon />}
+                                                                sx={{ fontWeight: 600 }}
+                                                            >
+                                                                Thử lại
+                                                            </Button>
+                                                        )
+                                                    }
                                                 >
                                                     {faceLoginMessage}
                                                 </Alert>
                                             )}
 
+                                            {/* Retry Button - Standalone */}
+                                            {faceLoginStatus === 'error' && (
+                                                <Box sx={{ mb: 2, textAlign: 'center' }}>
+                                                    <Button
+                                                        variant="contained"
+                                                        onClick={handleRetryFaceLogin}
+                                                        startIcon={<RefreshIcon />}
+                                                        sx={{
+                                                            borderRadius: 3,
+                                                            py: 1.5,
+                                                            px: 4,
+                                                            background: 'linear-gradient(135deg, #0891B2 0%, #0E7490 100%)',
+                                                            boxShadow: '0 4px 15px rgba(8, 145, 178, 0.3)',
+                                                            '&:hover': {
+                                                                background: 'linear-gradient(135deg, #0E7490 0%, #164E63 100%)',
+                                                            },
+                                                        }}
+                                                    >
+                                                        Thử lại nhận diện
+                                                    </Button>
+                                                </Box>
+                                            )}
+
                                             {/* Face Capture */}
-                                            {faceLoginStatus !== 'success' && (
+                                            {faceLoginStatus !== 'success' && faceLoginStatus !== 'error' && (
                                                 <FaceCapture
                                                     onSubmit={handleFaceCapture}
                                                     mode="login"

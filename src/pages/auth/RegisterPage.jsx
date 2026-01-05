@@ -117,6 +117,8 @@ const RegisterPage = () => {
     };
 
     const handleFaceCapture = (images) => {
+        console.log('=== FACE CAPTURE ===');
+        console.log('Received images:', images.length);
         setFaceImages(images);
     };
 
@@ -145,9 +147,12 @@ const RegisterPage = () => {
         }
         // Validation for step 2 - Face Recognition (OPTIONAL)
         if (activeStep === 2) {
-            // Face is optional - just check if user enabled it and has images
+            // Face is optional - need at least 1 image for registration
             if (enableFaceLogin && faceImages.length >= 1) {
                 setFaceRegistrationStatus('success');
+            } else if (enableFaceLogin && faceImages.length === 0) {
+                setError('Cần chụp ít nhất 1 ảnh khuôn mặt để đăng ký');
+                return;
             } else {
                 setFaceRegistrationStatus('skipped');
             }
@@ -171,6 +176,12 @@ const RegisterPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
+        // Debug log
+        console.log('=== REGISTER SUBMIT ===');
+        console.log('enableFaceLogin:', enableFaceLogin);
+        console.log('faceImages.length:', faceImages.length);
+        console.log('faceImages:', faceImages);
+        
         // Prepare data
         const userData = {
             username: formData.username,
@@ -178,8 +189,10 @@ const RegisterPage = () => {
             password: formData.password,
             full_name: formData.full_name,
             role: formData.role,
-            face_images: enableFaceLogin && faceImages.length >= 3 ? faceImages : null,
+            face_images: enableFaceLogin && faceImages.length >= 1 ? faceImages : null,
         };
+        
+        console.log('userData.face_images:', userData.face_images ? `${userData.face_images.length} images` : 'null');
 
         if (formData.role === 'doctor') {
             userData.doctor_info = {
@@ -238,30 +251,23 @@ const RegisterPage = () => {
                                     sx={textFieldSx}
                                 />
                             </Grid>
+                            {/* Role is fixed to doctor - removed admin option */}
                             <Grid item xs={12}>
-                                <FormControl fullWidth sx={textFieldSx}>
-                                    <InputLabel>Vai trò</InputLabel>
-                                    <Select
-                                        name="role"
-                                        value={formData.role}
-                                        onChange={handleChange}
-                                        label="Vai trò"
-                                        sx={{ borderRadius: 3 }}
-                                    >
-                                        <MenuItem value="doctor">
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <MedicalServices fontSize="small" sx={{ color: '#0891B2' }} />
-                                                Bác sĩ
-                                            </Box>
-                                        </MenuItem>
-                                        <MenuItem value="admin">
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Badge fontSize="small" sx={{ color: '#EF4444' }} />
-                                                Quản trị viên
-                                            </Box>
-                                        </MenuItem>
-                                    </Select>
-                                </FormControl>
+                                <TextField
+                                    fullWidth
+                                    label="Vai trò"
+                                    value="Bác sĩ"
+                                    disabled
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <MedicalServices sx={{ color: '#0891B2' }} />
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                    sx={textFieldSx}
+                                    helperText="Tài khoản mới chỉ được đăng ký với vai trò Bác sĩ"
+                                />
                             </Grid>
                             
                             {/* Doctor specific fields */}

@@ -473,14 +473,22 @@ const FaceCapture = ({
     const newImages = [...capturedImages, imageData];
     setCapturedImages(newImages);
     
+    console.log('[FaceCapture] Captured image, total:', newImages.length);
+    
+    // Always call onCapture to update parent state
+    if (onCapture) {
+      console.log('[FaceCapture] Calling onCapture with', newImages.length, 'images');
+      onCapture(newImages);
+    } else {
+      console.log('[FaceCapture] onCapture is not defined!');
+    }
+    
     // Auto submit after capturing required images
     if (newImages.length >= maxImages) {
       stopCamera();
       if (onSubmit) {
         onSubmit(newImages);
       }
-    } else if (onCapture) {
-      onCapture(newImages);
     }
   }, [faceDetected, capturedImages, onCapture, onSubmit, facingMode, maxImages, stopCamera]);
 
