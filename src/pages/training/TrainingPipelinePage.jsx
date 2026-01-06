@@ -596,7 +596,7 @@ const TrainingPipelinePage = () => {
             </StepCard>
             
             {/* Step 2: DiffDRR */}
-            <StepCard stepNumber="2" title="Bước 2: DiffDRR - Tạo X-ray giả" description="Sử dụng DiffDRR thật để tạo ảnh DRR từ CT volume"
+            <StepCard stepNumber="2" title="Bước 2: DiffDRR - Tạo X-ray tổng hợp" description="Sử dụng DiffDRR thật để tạo ảnh DRR từ CT volume"
               status={stepsStatus.step2} expanded={expandedSteps.step2} onToggle={() => toggleStep('step2')} onRun={runDiffDRR}>
               {drrResult ? (
                 <Box>
@@ -635,7 +635,7 @@ const TrainingPipelinePage = () => {
             </StepCard>
             
             {/* Step 3: CycleGAN */}
-            <StepCard stepNumber="3" title="Bước 3: CycleGAN - Chuyển đổi sang X-ray thật" description="Sử dụng CycleGAN model đã train để chuyển đổi"
+            <StepCard stepNumber="3" title="Bước 3: CycleGAN - Ánh xạ sang miền X-ray thật" description="Sử dụng CycleGAN model đã train để chuyển đổi"
               status={stepsStatus.step3} expanded={expandedSteps.step3} onToggle={() => toggleStep('step3')} onRun={runCycleGAN}>
               {cycleganResult ? (
                 <Box>
